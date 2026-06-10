@@ -30,22 +30,37 @@ def apply_rotary_transformers(
     cos = cos.unsqueeze(unsqueeze_dim)
     sin = sin.unsqueeze(unsqueeze_dim)
 
-    q_rotated = q.clone()
-    k_rotated = k.clone()
-
     # Get half dimension for rotation
     half_dim = q.shape[-1] // 2
-    q1 = q_rotated[..., :half_dim]
-    q2 = q_rotated[..., half_dim:]
-    k1 = k_rotated[..., :half_dim]
-    k2 = k_rotated[..., half_dim:]
     if cos.shape[-1] != half_dim:
         # Trim cos/sin to match half_dim
         cos = cos[..., :half_dim]
         sin = sin[..., :half_dim]
 
-    apply_rotary(q1, q2, cos, sin, q1, q2, False)
-    apply_rotary(k1, k2, cos, sin, k1, k2, False)
+    # Write into fresh output buffers, reading directly from q/k. This avoids the
+    # extra full read+write of cloning q/k before an in-place rotation (the kernel
+    # supports out != in), roughly halving the memory traffic of this wrapper.
+    q_rotated = torch.empty_like(q)
+    k_rotated = torch.empty_like(k)
+
+    apply_rotary(
+        q[..., :half_dim],
+        q[..., half_dim:],
+        cos,
+        sin,
+        q_rotated[..., :half_dim],
+        q_rotated[..., half_dim:],
+        False,
+    )
+    apply_rotary(
+        k[..., :half_dim],
+        k[..., half_dim:],
+        cos,
+        sin,
+        k_rotated[..., :half_dim],
+        k_rotated[..., half_dim:],
+        False,
+    )
     return q_rotated, k_rotated
 
 
