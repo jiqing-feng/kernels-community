@@ -77,6 +77,15 @@ mha_fwd(
     if (!is_mxfp) {
         TORCH_CHECK(v.dtype() == q_dtype, "query and value must have the same dtype");
         TORCH_CHECK(v.size(-1) == head_size_og, "Value head dimension must match Query head dimension");
+    } else if (q_dtype == torch::kFloat4_e2m1fn_x2) {
+        // MXFP4 (e2m1) consumes a BF16 value tensor; reject mismatches early
+        // instead of silently producing wrong results inside the kernel.
+        TORCH_CHECK(v.dtype() == torch::kBFloat16,
+                    "For fp4_e2m1fn_x2 query, value must be bf16");
+    } else {
+        // MXFP8 (e5m2 / e4m3fn) requires the value tensor to match the query fp8 dtype.
+        TORCH_CHECK(v.dtype() == q_dtype,
+                    "For fp8 query, value must have the same fp8 dtype as query");
     }
     // For FP4 (e2m1) the head dimension is packed (2 values per byte); unpack for padding math.
     const int head_size_actual = (q_dtype == torch::kFloat4_e2m1fn_x2) ? head_size_og * 2 : head_size_og;
@@ -448,6 +457,15 @@ mha_varlen_fwd(
     if (!is_mxfp) {
         TORCH_CHECK(v.dtype() == q_dtype, "query and value must have the same dtype");
         TORCH_CHECK(v.size(-1) == head_size_og, "Value head dimension must match Query head dimension");
+    } else if (q_dtype == torch::kFloat4_e2m1fn_x2) {
+        // MXFP4 (e2m1) consumes a BF16 value tensor; reject mismatches early
+        // instead of silently producing wrong results inside the kernel.
+        TORCH_CHECK(v.dtype() == torch::kBFloat16,
+                    "For fp4_e2m1fn_x2 query, value must be bf16");
+    } else {
+        // MXFP8 (e5m2 / e4m3fn) requires the value tensor to match the query fp8 dtype.
+        TORCH_CHECK(v.dtype() == q_dtype,
+                    "For fp8 query, value must have the same fp8 dtype as query");
     }
     // For FP4 (e2m1) the head dimension is packed (2 values per byte); unpack for padding math.
     const int head_size_actual = (q_dtype == torch::kFloat4_e2m1fn_x2) ? head_size_og * 2 : head_size_og;
